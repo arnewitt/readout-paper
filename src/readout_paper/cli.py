@@ -54,6 +54,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--list-voices", action="store_true", help="List known voices and exit"
     )
+    parser.add_argument(
+        "--ui", action="store_true", help="Open the local web UI in a browser"
+    )
+    parser.add_argument(
+        "--port", type=int, default=8765, help="Port for --ui (default: 8765)"
+    )
     return parser
 
 
@@ -87,6 +93,12 @@ def main() -> None:
 
     if args.list_voices:
         list_voices()
+        return
+
+    if args.ui:
+        from .ui import serve
+
+        serve(port=args.port, device=args.device)
         return
 
     text = resolve_text(args)

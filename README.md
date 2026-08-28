@@ -19,6 +19,18 @@ The language is inferred from the first letter of the voice name.
 
 Output is 24 kHz 16-bit mono WAV.
 
+## Web UI
+
+```bash
+uv run readout-paper --ui          # opens http://127.0.0.1:8765
+uv run readout-paper --ui --port 9000
+```
+
+Paste text, pick a voice and speed, and press *Read it aloud* (or Cmd/Ctrl-Enter).
+The result plays in the page on a waveform you can click to seek, and downloads
+as a WAV. It is a stdlib-only server bound to localhost -- no extra dependencies,
+no network calls.
+
 ## As a library
 
 ```python
