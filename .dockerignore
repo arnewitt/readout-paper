@@ -1,0 +1,22 @@
+# Everything the build does not need. Keeping this tight matters: the build
+# context is sent to the daemon on every build, and .venv alone is gigabytes.
+.venv/
+.git/
+.gitignore
+.dockerignore
+Dockerfile
+compose.yaml
+
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info/
+
+# Generated audio and local inputs -- mount these instead of baking them in.
+*.wav
+input/
+
+.DS_Store
+**/.DS_Store

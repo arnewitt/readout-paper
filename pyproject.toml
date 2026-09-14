@@ -11,6 +11,7 @@ dependencies = [
     "en-core-web-sm",
     "kokoro>=0.9.4",
     "numpy>=2.5.2",
+    "torch>=2.13.0",
 ]
 
 [project.scripts]
@@ -21,4 +22,13 @@ requires = ["uv_build>=0.12.5,<0.13.0"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
+# Kokoro only needs torch for inference, so pull the CPU-only build on Linux
+# (containers). It keeps the image ~6 GB smaller than the CUDA wheels PyPI
+# serves there. macOS keeps the PyPI build, which is what MPS needs.
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

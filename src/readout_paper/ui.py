@@ -112,13 +112,24 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, wav, "audio/wav")
 
 
+LOOPBACK = ("127.0.0.1", "localhost", "::1")
+
+
 def serve(host: str = "127.0.0.1", port: int = 8765, device: str | None = None,
-          open_browser: bool = True) -> None:
-    """Serve the UI until interrupted."""
+          open_browser: bool | None = None) -> None:
+    """Serve the UI until interrupted.
+
+    `open_browser` defaults to True only on a loopback host -- when bound to
+    0.0.0.0 (a container) there is no browser to open and the address the
+    server sees is not the one a client would use.
+    """
     Handler.device = device
     httpd = ThreadingHTTPServer((host, port), Handler)
-    url = f"http://{host}:{httpd.server_port}"
-    print(f"readout-paper UI on {url}  (Ctrl-C to stop)")
+    shown = "127.0.0.1" if host in ("0.0.0.0", "::") else host
+    url = f"http://{shown}:{httpd.server_port}"
+    print(f"readout-paper UI on {url}  (Ctrl-C to stop)", flush=True)
+    if open_browser is None:
+        open_browser = host in LOOPBACK
     if open_browser:
         threading.Timer(0.5, webbrowser.open, [url]).start()
     try:

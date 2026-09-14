@@ -60,6 +60,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--port", type=int, default=8765, help="Port for --ui (default: 8765)"
     )
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Address for --ui to bind (default: 127.0.0.1; use 0.0.0.0 in a container)",
+    )
     return parser
 
 
@@ -98,7 +103,7 @@ def main() -> None:
     if args.ui:
         from .ui import serve
 
-        serve(port=args.port, device=args.device)
+        serve(host=args.host, port=args.port, device=args.device)
         return
 
     text = resolve_text(args)

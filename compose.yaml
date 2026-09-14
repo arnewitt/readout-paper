@@ -1,0 +1,20 @@
+services:
+  # The web UI. It hands the WAV back to the browser, so it needs no output
+  # mount -- only somewhere to keep the model weights.
+  readout-paper:
+    build: .
+    image: readout-paper
+    ports:
+      - "127.0.0.1:8765:8765"
+    volumes:
+      - hf-cache:/home/app/.cache/huggingface
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/').read()"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+
+volumes:
+  hf-cache:
