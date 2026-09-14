@@ -19,8 +19,9 @@
     --mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
+  /* system default; an explicit choice stamps data-theme on <html> and wins */
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
       color-scheme: dark;
       --bg: #0f1214;
       --surface: #171c1f;
@@ -32,6 +33,18 @@
       --signal-dim: #2c4a49;
       --danger: #f08b7d;
     }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0f1214;
+    --surface: #171c1f;
+    --text: #e6eaec;
+    --muted: #8b9399;
+    --line: #262d31;
+    --line-strong: #39434a;
+    --signal: #3dd9c4;
+    --signal-dim: #2c4a49;
+    --danger: #f08b7d;
   }
 
   * { box-sizing: border-box; }
@@ -51,7 +64,14 @@
   }
 
   /* --- header ------------------------------------------------------- */
-  header { margin-bottom: 2rem; }
+  header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
   h1 {
     font-family: var(--mono);
     font-size: 1.25rem;
@@ -168,6 +188,32 @@
     outline-offset: 2px;
   }
 
+  /* --- theme toggle --------------------------------------------------- */
+  .theme {
+    display: flex;
+    flex: none;
+    border: 1px solid var(--line-strong);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .theme button {
+    font-size: 0.6875rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 0.35rem 0.6rem;
+  }
+  .theme button + button { border-left: 1px solid var(--line-strong); }
+  .theme button:hover:not(:disabled) { background: transparent; color: var(--text); }
+  .theme button[aria-pressed="true"],
+  .theme button[aria-pressed="true"]:hover:not(:disabled) {
+    background: var(--signal-dim);
+    color: var(--text);
+  }
+
   /* --- player ------------------------------------------------------- */
   #player[hidden] { display: none; }
   canvas {
@@ -211,12 +257,28 @@
   }
   .transport a:hover { color: var(--signal); border-color: var(--signal); }
 </style>
+<script>
+  /* applied before first paint so an explicit choice never flashes */
+  try {
+    const saved = localStorage.getItem("readout-paper:theme");
+    if (saved === "light" || saved === "dark") {
+      document.documentElement.setAttribute("data-theme", saved);
+    }
+  } catch {}
+</script>
 </head>
 <body>
 <main>
   <header>
-    <h1>readout<span class="sep">-</span>paper</h1>
-    <p class="subtitle">Kokoro-82M &middot; running on this machine &middot; nothing leaves it</p>
+    <div>
+      <h1>readout<span class="sep">-</span>paper</h1>
+      <p class="subtitle">Kokoro-82M &middot; running on this machine &middot; nothing leaves it</p>
+    </div>
+    <div class="theme" role="group" aria-label="Color theme">
+      <button type="button" data-theme-choice="system" aria-pressed="true">Auto</button>
+      <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+      <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+    </div>
   </header>
 
   <form id="form">
@@ -475,6 +537,38 @@ canvas.addEventListener("keydown", (e) => {
   audio.currentTime = Math.min(audio.duration, Math.max(0, audio.currentTime + nudge));
   tick();
 });
+
+/* --- theme ---------------------------------------------------------- */
+const THEME_KEY = "readout-paper:theme";
+const themeButtons = [...document.querySelectorAll("[data-theme-choice]")];
+
+function applyTheme(choice) {
+  if (choice === "light" || choice === "dark") {
+    document.documentElement.setAttribute("data-theme", choice);
+  } else {
+    choice = "system";
+    document.documentElement.removeAttribute("data-theme");
+  }
+  for (const btn of themeButtons) {
+    btn.setAttribute("aria-pressed", String(btn.dataset.themeChoice === choice));
+  }
+  draw();  // the waveform paints with the palette's colors
+}
+
+for (const btn of themeButtons) {
+  btn.addEventListener("click", () => {
+    const choice = btn.dataset.themeChoice;
+    try {
+      if (choice === "system") localStorage.removeItem(THEME_KEY);
+      else localStorage.setItem(THEME_KEY, choice);
+    } catch {}
+    applyTheme(choice);
+  });
+}
+
+let savedTheme = null;
+try { savedTheme = localStorage.getItem(THEME_KEY); } catch {}
+applyTheme(savedTheme);
 
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
 </script>
