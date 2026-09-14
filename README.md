@@ -3,6 +3,45 @@
 Local text-to-speech using [hexgrad/Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M)
 via the `kokoro` package's `KPipeline`. No network calls after the model is cached.
 
+## Architecture
+
+Two front ends, one synthesis path. Everything below `tts.py` is imported
+lazily, so `--help` and `--list-voices` never pay for torch.
+
+```
+                                             ┌─────────────────────────────┐
+   ┌─────────────────────────────┐           │ ui.py  ↔  index.html        │
+   │ cli.py                      │           ├─────────────────────────────┤
+   ├─────────────────────────────┤           │ stdlib HTTP server          │
+   │ TEXT · -i FILE · stdin      ├── --ui ──▶│ GET /  ·  POST /synth       │
+   │ -o out.wav · --play         │           │ _lock · one synth at a time │
+   └──────────────┬──────────────┘           └──────────────┬──────────────┘
+                  │                                         │
+                  └────────────────────┬────────────────────┘
+                                       ▼
+                 ┌───────────────────────────────────────────┐
+                 │ tts.py                                    │
+                 ├───────────────────────────────────────────┤
+                 │ synth_to_wav() → synth_chunks()           │
+                 │ float32 → int16 → wave · 24 kHz mono      │
+                 └───────────────────────────────────────────┘
+                                       │
+                                       ▼
+                 ┌───────────────────────────────────────────┐
+                 │ kokoro.KPipeline                          │
+                 ├───────────────────────────────────────────┤
+                 │ misaki g2p + espeak-ng → phonemes → audio │
+                 │ cached per (lang, device) · lazy import   │
+                 └───────────────────────────────────────────┘
+                                       │
+                                       ▼
+                 ┌───────────────────────────────────────────┐
+                 │ Kokoro-82M weights + voice pack           │
+                 ├───────────────────────────────────────────┤
+                 │ ~/.cache/huggingface · first run only     │
+                 └───────────────────────────────────────────┘
+```
+
 ## Usage
 
 ```bash
