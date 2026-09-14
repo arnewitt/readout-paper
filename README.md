@@ -5,41 +5,55 @@ via the `kokoro` package's `KPipeline`. No network calls after the model is cach
 
 ## Architecture
 
-Two front ends, one synthesis path. Everything below `tts.py` is imported
-lazily, so `--help` and `--list-voices` never pay for torch.
+Two front ends, one synthesis path. Everything below the front ends is
+imported lazily, so `--help` and `--list-voices` never pay for torch, and
+audio is written chunk by chunk rather than held in memory.
 
 ```
-                                             ┌─────────────────────────────┐
-   ┌─────────────────────────────┐           │ ui.py  ↔  index.html        │
-   │ cli.py                      │           ├─────────────────────────────┤
-   ├─────────────────────────────┤           │ stdlib HTTP server          │
-   │ TEXT · -i FILE · stdin      ├── --ui ──▶│ GET /  ·  POST /synth       │
-   │ -o out.wav · --play         │           │ _lock · one synth at a time │
-   └──────────────┬──────────────┘           └──────────────┬──────────────┘
-                  │                                         │
-                  └────────────────────┬────────────────────┘
-                                       ▼
-                 ┌───────────────────────────────────────────┐
-                 │ tts.py                                    │
-                 ├───────────────────────────────────────────┤
-                 │ synth_to_wav() → synth_chunks()           │
-                 │ float32 → int16 → wave · 24 kHz mono      │
-                 └───────────────────────────────────────────┘
-                                       │
-                                       ▼
-                 ┌───────────────────────────────────────────┐
-                 │ kokoro.KPipeline                          │
-                 ├───────────────────────────────────────────┤
-                 │ misaki g2p + espeak-ng → phonemes → audio │
-                 │ cached per (lang, device) · lazy import   │
-                 └───────────────────────────────────────────┘
-                                       │
-                                       ▼
-                 ┌───────────────────────────────────────────┐
-                 │ Kokoro-82M weights + voice pack           │
-                 ├───────────────────────────────────────────┤
-                 │ ~/.cache/huggingface · first run only     │
-                 └───────────────────────────────────────────┘
+                                         ┌────────────────────────────────┐
+  ┌────────────────────────────┐         │ ui.py + index.html             │
+  │ cli.py · one shot          │         ├────────────────────────────────┤
+  ├────────────────────────────┤         │ GET /  → page + voice list     │
+  │ TEXT · -i FILE · stdin     ├─ --ui ─▶│ POST /synth {text,voice,speed} │
+  │ lang = --lang or voice[0]  │         │ ≤200k chars · speed 0.5–2.0    │
+  │ warns if voice ≠ lang      │         │ _lock · one synth at a time    │
+  └──────────────┬─────────────┘         └────────────────┬───────────────┘
+                 │                                        │
+                 └───────────────────┬────────────────────┘
+                                     ▼  text · voice · lang · speed
+              ┌────────────────────────────────────────────┐
+              │ tts.get_pipeline(lang, device)             │
+              ├────────────────────────────────────────────┤
+              │ cached in _pipelines per (lang, device)    │
+              │ first call fetches Kokoro-82M + voices     │
+              │ → ~/.cache/huggingface, then offline       │
+              └──────────────────────┬─────────────────────┘
+                                     ▼  a loaded KPipeline
+              ┌────────────────────────────────────────────┐
+              │ kokoro.KPipeline                           │
+              ├────────────────────────────────────────────┤
+              │ split_pattern=\n+ → text becomes segments  │
+              │ misaki g2p + espeak-ng → phonemes          │
+              │ Kokoro-82M + voice tensor → audio          │
+              │ one float32 chunk yielded per segment      │
+              └──────────────────────┬─────────────────────┘
+                                     ▼  float32 chunks @ 24 kHz
+              ┌────────────────────────────────────────────┐
+              │ tts.synth_to_wav()                         │
+              ├────────────────────────────────────────────┤
+              │ clip ±1.0 · ×32767 · int16                 │
+              │ wave.writeframes() per chunk, streamed     │
+              │ no frames → file removed + RuntimeError    │
+              └──────────────────────┬─────────────────────┘
+                                     │  24 kHz · 16-bit · mono WAV
+                 ┌───────────────────┴────────────────────┐
+                 ▼                                        ▼
+  ┌────────────────────────────┐         ┌────────────────────────────────┐
+  │ -o out.wav                 │         │ audio/wav response             │
+  ├────────────────────────────┤         ├────────────────────────────────┤
+  │ --play → afplay / aplay    │         │ waveform you can click to seek │
+  └────────────────────────────┘         │ saved as a WAV by the page     │
+                                         └────────────────────────────────┘
 ```
 
 ## Usage
